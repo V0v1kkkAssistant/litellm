@@ -184,6 +184,15 @@ impl PythonOwned for OcrPythonHost {
 mod tests {
     use super::*;
 
+    /// Runs a hook that never suspends to completion on the test thread.
+    fn settled<T>(future: impl std::future::Future<Output = T>) -> T {
+        let task = PythonTask::new(false);
+        match task.resume(std::pin::pin!(future), None).unwrap() {
+            litellm_host_python::Resumed::Complete(value) => value,
+            litellm_host_python::Resumed::Suspended(_) => panic!("the hook suspended"),
+        }
+    }
+
     #[rstest::rstest]
     #[case::acquired(true)]
     #[case::provider_raised(false)]
@@ -232,8 +241,13 @@ del provider
             drop(kwargs);
             let (reply, _) = litellm_host::protocol::reply();
             assert_eq!(
-                host.handle_host_call(py, OcrOp::AcquireAzureAdToken(reply))
-                    .is_ok(),
+                settled(
+                    host.handle_host_call(
+                        &PythonTask::new(false),
+                        OcrOp::AcquireAzureAdToken(reply)
+                    )
+                )
+                .is_ok(),
                 succeeds
             );
             let alive = || {
