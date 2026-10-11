@@ -1,5 +1,5 @@
 use litellm_host::hooks::CallHooks;
-use litellm_host_python::{PythonOwned, PythonRuntime};
+use litellm_host_python::{PythonOwned, PythonRuntime, PythonTask};
 use pyo3::{
     gc::{PyTraverseError, PyVisit},
     prelude::*,
@@ -36,14 +36,16 @@ pub(crate) const PYTHON_CONTRACT: &str = include_str!("../preflight_contract.jso
 pub(crate) struct SdkPolicy;
 
 impl CallHooks<PythonRuntime> for SdkPolicy {
-    fn arguments_prepared(&mut self, py: Python<'_>, arguments: &Py<PyDict>) -> PyResult<()> {
-        inherit_credentials(py, arguments.bind(py), || {
-            Ok(PythonPreflight::CredentialList
-                .call(py, ())?
-                .cast_into::<PyList>()?)
-        })?;
-        PythonPreflight::CheckLimits.call(py, (arguments,))?;
-        Ok(())
+    async fn arguments_prepared(&mut self, _: &PythonTask, arguments: &Py<PyDict>) -> PyResult<()> {
+        Python::attach(|py| {
+            inherit_credentials(py, arguments.bind(py), || {
+                Ok(PythonPreflight::CredentialList
+                    .call(py, ())?
+                    .cast_into::<PyList>()?)
+            })?;
+            PythonPreflight::CheckLimits.call(py, (arguments,))?;
+            Ok(())
+        })
     }
 }
 

@@ -1,7 +1,7 @@
 use std::convert::Infallible;
 
 use crate::routes::inference::InferenceHost;
-use litellm_host_python::{InvokeError, PythonBinding, PythonHostCalls, PythonOwned};
+use litellm_host_python::{InvokeError, PythonBinding, PythonHostCalls, PythonOwned, PythonTask};
 use litellm_inference_responses::{Error, route::Responses, types::ResponsesCall};
 use pyo3::{
     gc::{PyTraverseError, PyVisit},
@@ -111,9 +111,9 @@ impl PythonBinding for ResponsesPythonHost {
 }
 
 impl PythonHostCalls<Responses> for ResponsesPythonHost {
-    fn handle_host_call(
+    async fn handle_host_call(
         &mut self,
-        _: Python<'_>,
+        _: &PythonTask,
         op: Infallible,
     ) -> Result<(), InvokeError<Error>> {
         match op {}

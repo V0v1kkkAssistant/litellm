@@ -1,6 +1,6 @@
 use litellm_auth::ResolvedCredential;
 use litellm_host_python::{InvokeError, PythonBinding, missing_state};
-use litellm_host_python::{PythonHostCalls, PythonOwned};
+use litellm_host_python::{PythonHostCalls, PythonOwned, PythonTask};
 use litellm_inference_ocr::route::{Ocr, OcrCall, OcrOp};
 use litellm_llms::base_llm::ocr::error::Error;
 use litellm_llms_types::formats::ocr::LiteLLMOcrResponse;
@@ -149,12 +149,17 @@ impl PythonBinding for OcrPythonHost {
 }
 
 impl PythonHostCalls<Ocr> for OcrPythonHost {
-    fn handle_host_call(&mut self, py: Python<'_>, op: OcrOp) -> Result<(), InvokeError<Error>> {
+    async fn handle_host_call(
+        &mut self,
+        _: &PythonTask,
+        op: OcrOp,
+    ) -> Result<(), InvokeError<Error>> {
         match op {
-            OcrOp::AcquireAzureAdToken(reply) => self
-                .acquire_azure_ad_token(py)
-                .map(|token| reply.send(token))
-                .map_err(|error| InvokeError::Python(self.map_failure(py, error))),
+            OcrOp::AcquireAzureAdToken(reply) => Python::attach(|py| {
+                self.acquire_azure_ad_token(py)
+                    .map(|token| reply.send(token))
+                    .map_err(|error| InvokeError::Python(self.map_failure(py, error)))
+            }),
         }
     }
 }
